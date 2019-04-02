@@ -7,6 +7,8 @@ You can combine other strategy to build your own ID generate algorithm(e.g. addi
 
 All you need is only a relational database which support JDBC. No others(like Redis, Zookeeper) are needed.
 
+Support JDK 8 or higher.
+
 ## Usage:
 1. Create table for sequence persistence:
 ```sql

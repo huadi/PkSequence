@@ -3,14 +3,24 @@ package huadi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static huadi.Const.*;
+import static huadi.Const.DEFAULT_SEQUENCE_TABLE_NAME;
+import static huadi.Const.PROP_CONN_PASSWORD;
+import static huadi.Const.PROP_CONN_URL;
+import static huadi.Const.PROP_CONN_USERNAME;
+import static huadi.Const.PROP_DRIVER_NAME;
 
 /**
  * Primary Key sequence generator.
@@ -33,7 +43,12 @@ public class PkSequence {
         } catch (ClassNotFoundException e) {
             throw new Error("No JDBC driver.", e);
         }
-        preload();
+
+        Future<Void> preloadResult = asyncLoad();
+        try {
+            preloadResult.get();
+        } catch (InterruptedException | ExecutionException ignored) {
+        }
     }
 
     private String sequenceTableName = DEFAULT_SEQUENCE_TABLE_NAME;
@@ -69,15 +84,18 @@ public class PkSequence {
     }
 
 
-    private ExecutorService preloadThreadPool = Executors
-            .newSingleThreadExecutor(r -> new Thread(r, "PkSequencePreloadThread-" + name));
+    private ExecutorService preloadThreadPool = Executors.newSingleThreadExecutor(r -> new Thread(r,
+            "PkSequencePreloadThread-" + name));
 
     private void preload() {
         if (preloadSeqPool != null || onPreload.get() || !onPreload.compareAndSet(false, true)) {
             return;
         }
+        asyncLoad();
+    }
 
-        preloadThreadPool.submit(() -> {
+    private Future<Void> asyncLoad() {
+        return preloadThreadPool.submit(() -> {
             try (Connection c = getConn()) {
                 while (true) {
                     Long oldValue, stepValue, newValue;
@@ -99,6 +117,7 @@ public class PkSequence {
                             // 这里使用oldValue作为seqPool, 这样所有小于db中VALUE_COLUMN域的seq都可以认为是使用过的,
                             // 在应用运行过程中可以随时修改step大小.
                             preloadSeqPool = new SeqPool(oldValue + 1, newValue);
+                            return null;
                         }
                     }
                     logger.warn("[PkSeq] SeqPool load conflict, retry. KeyName: \"{}\", old: {}, new: {}, step: {}.",
@@ -113,8 +132,8 @@ public class PkSequence {
     }
 
     private Connection getConn() throws SQLException {
-        return DriverManager.getConnection(databaseConfig.getProperty(PROP_CONN_URL),
-                databaseConfig.getProperty(PROP_CONN_USERNAME), databaseConfig.getProperty(PROP_CONN_PASSWORD));
+        return DriverManager.getConnection(databaseConfig.getProperty(PROP_CONN_URL), databaseConfig.getProperty
+                (PROP_CONN_USERNAME), databaseConfig.getProperty(PROP_CONN_PASSWORD));
     }
 
     // 对于get方法来讲, pk和max必须保证原子更新, 所以这里用一个class封装.

@@ -4,7 +4,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static huadi.Const.*;
+import static huadi.Const.DEFAULT_SEQUENCE_TABLE_NAME;
+import static huadi.Const.PROP_DRIVER_NAME;
 
 /**
  * For ones want to use multiple PkSequence in one place, this is what you want.
@@ -28,22 +29,22 @@ public class MultiPkSequence {
         }
     }
 
-    private Map<String, PkSequence> generators = new ConcurrentHashMap<>();
+    private Map<String, PkSequence> sequences = new ConcurrentHashMap<>();
 
     public Long get(String name) {
-        if (!generators.containsKey(name)) {
+        if (!sequences.containsKey(name)) {
             synchronized (this) {
-                if (!generators.containsKey(name)) {
+                if (!sequences.containsKey(name)) {
                     PkSequence sequence = new PkSequence();
                     sequence.setName(name);
                     sequence.setDatabaseConfig(databaseConfig);
                     sequence.setSequenceTableName(sequenceTableName);
                     sequence.init();
-                    generators.put(name, sequence);
+                    sequences.put(name, sequence);
                 }
             }
         }
-        return generators.get(name).get();
+        return sequences.get(name).get();
     }
 
 
