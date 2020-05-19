@@ -58,6 +58,8 @@ Config in spring, remember change configs to your own:
       <prop key="password">root</prop>
     </props>
   </property>
+  <!-- dataSource has higher priority than databaseConfig. If it is set, the databaseConfig will be ignored. -->
+  <property name="dataSource" ref="yourOwnDataSource"/>
   <!-- Config it when you do NOT use default table config. -->
   <property name="sequenceTableName" value="yourOwnSeqTableName"/>
 </bean>
@@ -110,3 +112,4 @@ You can use `grep PkSeq your-app-log-file.log` to see all the log made by PkSequ
 
 ## Change step
 If you find your application's gotten too many load action, just increase the `step` column value on that key in your sequence persistence table directly.
+Also feel free to decrease the step at any time. 

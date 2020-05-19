@@ -3,6 +3,7 @@ package huadi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.sql.DataSource;
 import java.sql.*;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicLong;
@@ -19,16 +20,18 @@ public class PkSequence {
     private static final Logger logger = LoggerFactory.getLogger(PkSequence.class);
 
     private Properties databaseConfig = new Properties();
-
+    private DataSource dataSource;
 
     public void init() {
         if (name == null) {
             throw new RuntimeException("No sequence name configured.");
         }
-        try {
-            Class.forName(databaseConfig.getProperty(PROP_DRIVER_NAME));
-        } catch (ClassNotFoundException e) {
-            throw new Error("No JDBC driver.", e);
+        if (dataSource == null) {
+            try {
+                Class.forName(databaseConfig.getProperty(PROP_DRIVER_NAME));
+            } catch (ClassNotFoundException e) {
+                throw new Error("No JDBC driver.", e);
+            }
         }
     }
 
@@ -58,8 +61,7 @@ public class PkSequence {
 
     private SeqPool load() {
         // 高并发情况下, 优先考虑增大step减少load次数, 所以这里并不需要强制使用连接池.
-        try (Connection c = DriverManager.getConnection(databaseConfig.getProperty(PROP_CONN_URL),
-                databaseConfig.getProperty(PROP_CONN_USERNAME), databaseConfig.getProperty(PROP_CONN_PASSWORD))) {
+        try (Connection c = getConnection()) {
             while (true) {
                 Long oldValue, stepValue, newValue;
                 try (Statement s = c.createStatement()) {
@@ -90,6 +92,18 @@ public class PkSequence {
         }
     }
 
+    private Connection getConnection() throws SQLException {
+        Connection c;
+        if (dataSource != null) {
+            c = dataSource.getConnection();
+        } else {
+            c = DriverManager.getConnection(databaseConfig.getProperty(PROP_CONN_URL),
+                                            databaseConfig.getProperty(PROP_CONN_USERNAME),
+                                            databaseConfig.getProperty(PROP_CONN_PASSWORD));
+        }
+        return c;
+    }
+
     // 对于get方法来讲, pk和max必须保证原子更新, 所以这里用一个class封装.
     private static class SeqPool {
         static final long INVALID_VALUE = Long.MIN_VALUE;
@@ -111,6 +125,10 @@ public class PkSequence {
 
     public void setDatabaseConfig(Properties databaseConfig) {
         this.databaseConfig = databaseConfig;
+    }
+
+    public void setDataSource(DataSource dataSource) {
+        this.dataSource = dataSource;
     }
 
     public void setName(String name) {
